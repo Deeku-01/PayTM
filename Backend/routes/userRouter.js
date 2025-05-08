@@ -4,6 +4,7 @@ const UserRouter=express.Router();
 const jwt =require("jsonwebtoken");
 const JWT_SECRET=require("../config");
 const AuthMiddleware = require('../middlewares');
+const { Account, User } = require('../databaseUtil');
 
 
 
@@ -11,15 +12,17 @@ const AuthMiddleware = require('../middlewares');
 
 
 //SignUp Handle 
+// Also when he signs up make sure to give him a random balance 
 const signUpSchema= zod.object({
     username:zod.string().email(),
     password:zod.string(),
-    FName: zod.string(),
+    Fname: zod.string(),
     Lname:zod.string()
 })
 
 UserRouter.post("/signUp", async(req,res)=>{
     const body=req.body;
+    console.log(req.body);
     const {success}= signUpSchema.safeParse(body);
     if(!success){
         return res.status(411).json({
@@ -29,9 +32,9 @@ UserRouter.post("/signUp", async(req,res)=>{
     const usr= await User.findOne({
         username:body.username
     })
-    if(usr._id){
+    if(usr){
         return res.status(411).json({
-            message:"Email Already Taken / Incorrect Inputs"
+            message:"UserName Taken"
         })
     }
 
@@ -44,10 +47,19 @@ UserRouter.post("/signUp", async(req,res)=>{
         message:"User Created Succesfully",
         token:token
     })
+
+    // Create a new account 
+    await Account.create({
+        userId:dbUser._id,
+        balance:+Math.random() *1000
+    })
+
+    // Now he has some balance to play 
 })
 
 
 // Sign in handle
+
 const signinBody = zod.object({
     username: zod.string().email(),
 	password: zod.string()
@@ -57,7 +69,7 @@ UserRouter.post("/signin", async (req, res) => {
     const { success } = signinBody.safeParse(req.body)
     if (!success) {
         return res.status(411).json({
-            message: "Email already taken / Incorrect inputs"
+            message: "Incorrect inputs"
         })
     }
 
@@ -65,13 +77,14 @@ UserRouter.post("/signin", async (req, res) => {
         username: req.body.username,
         password: req.body.password
     });
-
+    
     if (user) {
         const token = jwt.sign({
             userId: user._id
         }, JWT_SECRET);
   
         res.json({
+            message:"Sucessfully Logged IN",
             token: token
         })
         return;
@@ -91,7 +104,7 @@ const updateBody = zod.object({
     lastName: zod.string().optional(),
 })
 
-UserRouter.put("/", AuthMiddleware, async (req, res) => {
+UserRouter.put("/updates", AuthMiddleware, async (req, res) => {
     const { success } = updateBody.safeParse(req.body)
     if (!success) {
         res.status(411).json({
@@ -99,12 +112,22 @@ UserRouter.put("/", AuthMiddleware, async (req, res) => {
         })
     }
 
-    await User.updateOne(req.body, {
-        id: req.userId
-    })
-
-    res.json({
-        message: "Updated successfully"
+    const updated=await User.updateOne(
+        { _id: req.userId },       // ✅ filter
+        { $set: req.body }         // ✅ update
+    )
+    //cross check
+    // console.log(updated)
+    // const updatedUser = await User.findOne({ _id: req.userId });
+    // console.log("Updated User:", updatedUser);
+    if(updated){
+        return res.json({
+            message: "Updated successfully"
+        })
+        
+    }
+    return res.json({
+        message: "Unable to update"
     })
 })
 
@@ -115,21 +138,21 @@ UserRouter.get("/bulk", async (req, res) => {
 
     const users = await User.find({
         $or: [{
-            firstName: {
+            Fname: {
                 "$regex": filter
             }
         }, {
-            lastName: {
+            Lname: {
                 "$regex": filter
             }
         }]
     })
 
-    res.json({
+    return res.json({
         user: users.map(user => ({
             username: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
+            Fname: user.Fname,
+            Lname: user.Lname,
             _id: user._id
         }))
     })

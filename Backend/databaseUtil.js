@@ -11,7 +11,7 @@ const DBPath="mongodb://localhost:27017/PayTm"
         trim:true,
         lowercase:true,
         minLength:3,
-        maxLength:10
+        maxLength:20
     },
     password:{
         type:String,
